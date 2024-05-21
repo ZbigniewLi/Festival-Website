@@ -1,18 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo} from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Button, Progress, Alert } from 'reactstrap';
-import { getSeats, loadSeatsRequest, getRequests } from '../../../redux/seatsRedux';
+import { getSeats, loadSeatsRequest, getRequests, loadSeats } from '../../../redux/seatsRedux';
 import './SeatChooser.scss';
+import io from 'socket.io-client';
 
 const SeatChooser = ({ chosenDay, chosenSeat, updateSeat }) => {
   const dispatch = useDispatch();
   const seats = useSelector(getSeats);
   const requests = useSelector(getRequests);
   
+  
   useEffect(() => {
     dispatch(loadSeatsRequest());
-    const timer = setInterval(() => loadSeatsRequest(), 2000)
-    return () => clearInterval(timer)
+    
+    const socket = io(process.env.NODE_ENV === 'production' ? '' : 'ws://localhost:8000', { transports: ['websocket'] });
+    socket.on('seatsUpdated', (seats) => dispatch(loadSeats(seats)))
   }, [dispatch])
 
   const isTaken = (seatId) => {
@@ -25,6 +28,16 @@ const SeatChooser = ({ chosenDay, chosenSeat, updateSeat }) => {
     else return <Button key={seatId} color="primary" className="seats__seat" outline onClick={(e) => updateSeat(e, seatId)}>{seatId}</Button>;
   }
 
+  const freeSeatsAmount = useMemo( () => {
+    let freeSeats = 0;
+    let allSeats = 50;
+      for (let i = 1 ; i <= allSeats; i++) {
+        if(!isTaken(i)) freeSeats++ ;
+      }
+      return freeSeats
+
+  }, [seats] )
+
   return (
     <div>
       <h3>Pick a seat</h3>
@@ -35,6 +48,7 @@ const SeatChooser = ({ chosenDay, chosenSeat, updateSeat }) => {
       { (requests['LOAD_SEATS'] && requests['LOAD_SEATS'].success) && <div className="seats">{[...Array(50)].map((x, i) => prepareSeat(i+1) )}</div>}
       { (requests['LOAD_SEATS'] && requests['LOAD_SEATS'].pending) && <Progress animated color="primary" value={50} /> }
       { (requests['LOAD_SEATS'] && requests['LOAD_SEATS'].error) && <Alert color="warning">Couldn't load seats...</Alert> }
+      { freeSeatsAmount}/50
     </div>
   )
 }
